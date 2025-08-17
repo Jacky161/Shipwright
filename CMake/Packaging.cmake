@@ -43,6 +43,51 @@ set(CPACK_DEB_COMPONENT_INSTALL YES)
 set(CPACK_EXTERNAL_ENABLE_STAGING YES)
 set(CPACK_EXTERNAL_PACKAGE_SCRIPT "${PROJECT_BINARY_DIR}/appimage-generate.cmake")
 
+if (ARCHITECTURE STREQUAL "arm64")
+
+file(GENERATE
+  OUTPUT "${PROJECT_BINARY_DIR}/appimage-generate.cmake"
+  CONTENT [[
+include(CMakePrintHelpers)
+cmake_print_variables(CPACK_TEMPORARY_DIRECTORY)
+cmake_print_variables(CPACK_TOPLEVEL_DIRECTORY)
+cmake_print_variables(CPACK_PACKAGE_DIRECTORY)
+cmake_print_variables(CPACK_PACKAGE_FILE_NAME)
+
+find_program(LINUXDEPLOY_EXECUTABLE
+  NAMES linuxdeploy linuxdeploy-aarch64.AppImage
+  PATHS ${CPACK_PACKAGE_DIRECTORY}/linuxdeploy)
+
+if (NOT LINUXDEPLOY_EXECUTABLE)
+  message(STATUS "Downloading linuxdeploy")
+  set(LINUXDEPLOY_EXECUTABLE ${CPACK_PACKAGE_DIRECTORY}/linuxdeploy/linuxdeploy)
+  file(DOWNLOAD 
+      https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20240109-1/linuxdeploy-aarch64.AppImage
+      ${LINUXDEPLOY_EXECUTABLE}
+      INACTIVITY_TIMEOUT 10
+      LOG ${CPACK_PACKAGE_DIRECTORY}/linuxdeploy/download.log
+      STATUS LINUXDEPLOY_DOWNLOAD)
+  execute_process(COMMAND chmod +x ${LINUXDEPLOY_EXECUTABLE} COMMAND_ECHO STDOUT)
+endif()
+
+execute_process(
+  COMMAND
+    ${CMAKE_COMMAND} -E env
+      OUTPUT=${CPACK_PACKAGE_FILE_NAME}.appimage
+      VERSION=$<IF:$<BOOL:${CPACK_PACKAGE_VERSION}>,${CPACK_PACKAGE_VERSION},0.1.0>
+    ${LINUXDEPLOY_EXECUTABLE}
+    --appimage-extract-and-run
+    --appdir=${CPACK_TEMPORARY_DIRECTORY}
+    --executable=$<TARGET_FILE:soh>
+    $<$<BOOL:$<TARGET_PROPERTY:soh,APPIMAGE_DESKTOP_FILE>>:--desktop-file=$<TARGET_PROPERTY:soh,APPIMAGE_DESKTOP_FILE>>
+    $<$<BOOL:$<TARGET_PROPERTY:soh,APPIMAGE_ICON_FILE>>:--icon-file=$<TARGET_PROPERTY:soh,APPIMAGE_ICON_FILE>>
+    --output=appimage
+    # --verbosity=2
+)
+]])
+
+else()
+
 file(GENERATE
   OUTPUT "${PROJECT_BINARY_DIR}/appimage-generate.cmake"
   CONTENT [[
@@ -86,5 +131,7 @@ execute_process(
 
 endif()
 
-include(CPack)
 
+endif()
+
+include(CPack)
